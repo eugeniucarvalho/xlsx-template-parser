@@ -16,34 +16,37 @@ var _ = reflect.Copy
 var _ = strconv.Itoa
 
 var parserATN = []uint16{
-	3, 24715, 42794, 33075, 47597, 16764, 15335, 30598, 22884, 3, 18, 42, 4,
+	3, 24715, 42794, 33075, 47597, 16764, 15335, 30598, 22884, 3, 19, 45, 4,
 	2, 9, 2, 4, 3, 9, 3, 4, 4, 9, 4, 4, 5, 9, 5, 3, 2, 3, 2, 3, 2, 3, 2, 3,
 	2, 3, 2, 3, 2, 3, 3, 5, 3, 19, 10, 3, 3, 3, 3, 3, 3, 3, 5, 3, 24, 10, 3,
 	3, 4, 3, 4, 3, 5, 5, 5, 29, 10, 5, 3, 5, 3, 5, 3, 5, 3, 5, 7, 5, 35, 10,
-	5, 12, 5, 14, 5, 38, 11, 5, 5, 5, 40, 10, 5, 3, 5, 2, 2, 6, 2, 4, 6, 8,
-	2, 3, 3, 2, 3, 6, 2, 43, 2, 10, 3, 2, 2, 2, 4, 23, 3, 2, 2, 2, 6, 25, 3,
-	2, 2, 2, 8, 28, 3, 2, 2, 2, 10, 11, 7, 8, 2, 2, 11, 12, 7, 8, 2, 2, 12,
-	13, 5, 4, 3, 2, 13, 14, 7, 9, 2, 2, 14, 15, 7, 9, 2, 2, 15, 16, 7, 2, 2,
-	3, 16, 3, 3, 2, 2, 2, 17, 19, 5, 6, 4, 2, 18, 17, 3, 2, 2, 2, 18, 19, 3,
-	2, 2, 2, 19, 20, 3, 2, 2, 2, 20, 24, 5, 8, 5, 2, 21, 24, 7, 12, 2, 2, 22,
-	24, 7, 13, 2, 2, 23, 18, 3, 2, 2, 2, 23, 21, 3, 2, 2, 2, 23, 22, 3, 2,
-	2, 2, 24, 5, 3, 2, 2, 2, 25, 26, 9, 2, 2, 2, 26, 7, 3, 2, 2, 2, 27, 29,
-	7, 7, 2, 2, 28, 27, 3, 2, 2, 2, 28, 29, 3, 2, 2, 2, 29, 30, 3, 2, 2, 2,
-	30, 39, 7, 11, 2, 2, 31, 36, 7, 14, 2, 2, 32, 33, 7, 11, 2, 2, 33, 35,
-	7, 14, 2, 2, 34, 32, 3, 2, 2, 2, 35, 38, 3, 2, 2, 2, 36, 34, 3, 2, 2, 2,
-	36, 37, 3, 2, 2, 2, 37, 40, 3, 2, 2, 2, 38, 36, 3, 2, 2, 2, 39, 31, 3,
-	2, 2, 2, 39, 40, 3, 2, 2, 2, 40, 9, 3, 2, 2, 2, 7, 18, 23, 28, 36, 39,
+	5, 12, 5, 14, 5, 38, 11, 5, 5, 5, 40, 10, 5, 3, 5, 5, 5, 43, 10, 5, 3,
+	5, 2, 2, 6, 2, 4, 6, 8, 2, 3, 3, 2, 3, 6, 2, 47, 2, 10, 3, 2, 2, 2, 4,
+	23, 3, 2, 2, 2, 6, 25, 3, 2, 2, 2, 8, 28, 3, 2, 2, 2, 10, 11, 7, 8, 2,
+	2, 11, 12, 7, 8, 2, 2, 12, 13, 5, 4, 3, 2, 13, 14, 7, 9, 2, 2, 14, 15,
+	7, 9, 2, 2, 15, 16, 7, 2, 2, 3, 16, 3, 3, 2, 2, 2, 17, 19, 5, 6, 4, 2,
+	18, 17, 3, 2, 2, 2, 18, 19, 3, 2, 2, 2, 19, 20, 3, 2, 2, 2, 20, 24, 5,
+	8, 5, 2, 21, 24, 7, 13, 2, 2, 22, 24, 7, 14, 2, 2, 23, 18, 3, 2, 2, 2,
+	23, 21, 3, 2, 2, 2, 23, 22, 3, 2, 2, 2, 24, 5, 3, 2, 2, 2, 25, 26, 9, 2,
+	2, 2, 26, 7, 3, 2, 2, 2, 27, 29, 7, 7, 2, 2, 28, 27, 3, 2, 2, 2, 28, 29,
+	3, 2, 2, 2, 29, 30, 3, 2, 2, 2, 30, 39, 7, 12, 2, 2, 31, 36, 7, 16, 2,
+	2, 32, 33, 7, 12, 2, 2, 33, 35, 7, 16, 2, 2, 34, 32, 3, 2, 2, 2, 35, 38,
+	3, 2, 2, 2, 36, 34, 3, 2, 2, 2, 36, 37, 3, 2, 2, 2, 37, 40, 3, 2, 2, 2,
+	38, 36, 3, 2, 2, 2, 39, 31, 3, 2, 2, 2, 39, 40, 3, 2, 2, 2, 40, 42, 3,
+	2, 2, 2, 41, 43, 7, 11, 2, 2, 42, 41, 3, 2, 2, 2, 42, 43, 3, 2, 2, 2, 43,
+	9, 3, 2, 2, 2, 8, 18, 23, 28, 36, 39, 42,
 }
 var deserializer = antlr.NewATNDeserializer(nil)
 var deserializedATN = deserializer.DeserializeFromUInt16(parserATN)
 
 var literalNames = []string{
 	"", "'range'", "'if'", "'with'", "'block'", "'&'", "'{'", "'}'", "'|'",
-	"'.'", "'end'", "'stop'",
+	"'>>>'", "'.'", "'end'", "'stop'", "'$'",
 }
 var symbolicNames = []string{
-	"", "", "", "", "", "R_AND", "R_BRACE_L", "R_BRACE_R", "R_PIPE", "R_DOT",
-	"R_END", "R_STOP", "ID", "T_INTEIRO", "R_LINE_COMMENT", "R_WS", "R_COMMENT",
+	"", "", "", "", "", "R_AND", "R_BRACE_L", "R_BRACE_R", "R_PIPE", "R_SPREAD",
+	"R_DOT", "R_END", "R_STOP", "R_DOLAR", "ID", "R_LINE_COMMENT", "R_WS",
+	"R_COMMENT",
 }
 
 var ruleNames = []string{
@@ -86,14 +89,15 @@ const (
 	GrammarParserR_BRACE_L      = 6
 	GrammarParserR_BRACE_R      = 7
 	GrammarParserR_PIPE         = 8
-	GrammarParserR_DOT          = 9
-	GrammarParserR_END          = 10
-	GrammarParserR_STOP         = 11
-	GrammarParserID             = 12
-	GrammarParserT_INTEIRO      = 13
-	GrammarParserR_LINE_COMMENT = 14
-	GrammarParserR_WS           = 15
-	GrammarParserR_COMMENT      = 16
+	GrammarParserR_SPREAD       = 9
+	GrammarParserR_DOT          = 10
+	GrammarParserR_END          = 11
+	GrammarParserR_STOP         = 12
+	GrammarParserR_DOLAR        = 13
+	GrammarParserID             = 14
+	GrammarParserR_LINE_COMMENT = 15
+	GrammarParserR_WS           = 16
+	GrammarParserR_COMMENT      = 17
 )
 
 // GrammarParser rules.
@@ -541,6 +545,10 @@ func (s *PathContext) ID(i int) antlr.TerminalNode {
 	return s.GetToken(GrammarParserID, i)
 }
 
+func (s *PathContext) R_SPREAD() antlr.TerminalNode {
+	return s.GetToken(GrammarParserR_SPREAD, 0)
+}
+
 func (s *PathContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
@@ -624,6 +632,17 @@ func (p *GrammarParser) Path() (localctx IPathContext) {
 			p.SetState(36)
 			p.GetErrorHandler().Sync(p)
 			_la = p.GetTokenStream().LA(1)
+		}
+
+	}
+	p.SetState(40)
+	p.GetErrorHandler().Sync(p)
+	_la = p.GetTokenStream().LA(1)
+
+	if _la == GrammarParserR_SPREAD {
+		{
+			p.SetState(39)
+			p.Match(GrammarParserR_SPREAD)
 		}
 
 	}

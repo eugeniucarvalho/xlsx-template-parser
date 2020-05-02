@@ -13,7 +13,6 @@ import (
 	"git.nanocomp.dcc.ufmg.br/mggrafeno/platform.v2/utils/xlsx/parser"
 	"github.com/360EntSecGroup-Skylar/excelize/v2"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/davecgh/go-spew/spew"
 
 	"github.com/jeremywohl/flatten"
 )
@@ -22,6 +21,7 @@ import (
 type Xlsx struct {
     file *excelize.File
     data  map[string]interface{}
+    Rows  [][]string
     Error chan error
     Progress chan int
     Done chan bool
@@ -33,13 +33,8 @@ type Options struct {
 }
 
 var (
-    rgx             = regexp.MustCompile(`\{\{\s*(\.\w+(\.\w+)*)\}\}`)
-    eachRegex       = regexp.MustCompile(`\{\{\#each\s+(\w+)\s*\}\}`)
-    endRegex        = regexp.MustCompile(`\{\{\s*\/end\s*\}\}`)
-    stopRegex        = regexp.MustCompile(`\{\{\s*\/\$stop\s*\}\}`)
-    filtro          = regexp.MustCompile(`\{\{\s*filtro\\|([\w:]*)\s*\}\}.*`)                      
-    removeMustache  = regexp.MustCompile(`[{}]*`)
-    hasMustache     = regexp.MustCompile(`{{[\w\.]*}}`)
+    expressionRegex = regexp.MustCompile(`(\{\{\s*[\w\s\.\&\$>]+\s*\}\})`)
+    stopRegex        = regexp.MustCompile(`\{\{\s*\/stop\s*\}\}`)
 )
 
 // ReadTemplate reads template from disk and stores it in a struct
@@ -55,6 +50,12 @@ func FromTemplate(path string) (xlsx *Xlsx,err error) {
     xlsx.file, err = excelize.OpenFile(path)
     
     return 
+}
+
+
+
+func (xlsx *Xlsx) File() *excelize.File {
+    return xlsx.file
 }
 
 func (xlsx *Xlsx) normalizeData(in interface{}) (data map[string]interface{}, err error) {
@@ -92,10 +93,8 @@ func (xlsx *Xlsx) normalizeData(in interface{}) (data map[string]interface{}, er
             
             base = fmt.Sprintf("%s.%s", base, part)
             
-            if _, err := strconv.ParseInt(part,10,64); err == nil {
-                if _, found := data[base]; !found {
-                    data[base] = true
-                }
+            if index, err := strconv.ParseInt(part,10,64); err == nil {
+                data[fmt.Sprintf("%s.$idx", base)] = fmt.Sprintf("%d", index + 1)
             }
         }
     } 
@@ -120,7 +119,7 @@ func (xlsx *Xlsx) RenderWithOptions(data interface{}, options *Options) (err err
         return
     }
 
-    spew.Dump(xlsx.data)
+    // spew.Dump(xlsx.data)
     
     for _, name := range file.GetSheetMap() {
         wg.Add(1)
@@ -149,25 +148,46 @@ func (xlsx *Xlsx) renderSheet(name string) (err error) {
         rows *excelize.Rows
         row []string
         index = 1
+        skip = 0
     )
     
     if rows, err = xlsx.file.Rows(name); err != nil {
         println(err.Error())
         return
     }
-
+    // Read all valid rows before a stop statement 
     for rows.Next() {
         if row, err = rows.Columns(); err != nil {
             println(err.Error())
             return
         }
         
+        xlsx.Rows = append(xlsx.Rows, row)
+        
         if xlsx.hasStop(row) {
-            return
+            break
+        }
+    }
+
+    for _, row := range xlsx.Rows {
+        
+        if skip > 0 {
+            skip--
+            continue
+        }
+        
+        context := &ExpressionListener{
+            xlsx: xlsx,
+            Sheet: name,
+            Row: row,
+            RowIndex: index,
         }
     
-        xlsx.evalRow(name, row, index)
-        index++
+        xlsx.EvalRow(context)
+
+        skip = context.Skip
+        
+        index = context.RowIndex + 1
     }
     
     return 
@@ -177,49 +197,50 @@ func (xlsx *Xlsx) hasStop(row []string) bool {
     return row == nil ||  stopRegex.MatchString(row[0])
 }
 
-func (xlsx *Xlsx) evalRow(sheet string, row []string, rowIndex int) (err error) {
-    // var (
-    //     file = xlsx.file
-    // )
-    
-    for index, val := range row {
-        xlsx.evalCell(sheet, row, rowIndex, index, val)
+func (xlsx *Xlsx) EvalRow(ctx *ExpressionListener) (err error) {
+    // sheet string, row []string, rowIndex int
+    for index, value := range ctx.Row {
+        // xlsx.evalCell(sheet, row, rowIndex, index, val)
+        ctx.Index = index 
+        ctx.Source = value 
+
+        xlsx.EvalCell(ctx)
     }
     return
 }
 
-func (xlsx *Xlsx) evalCell(sheet string, row []string, rowIndex, index int, value string) (err error) {
+// func (xlsx *Xlsx) evalCell(sheet string, row []string, rowIndex, index int, value string) (err error) {
+func (xlsx *Xlsx) EvalCell(ctx *ExpressionListener) (err error) {
 
-    value = strings.Trim(value," ")
-    
-    if value == ""  || !strings.Contains(value,"{{") {
-        return
+    var (
+        matchs []string
+    )
+    ctx.Source = strings.Trim(ctx.Source," ")
+
+    if matchs = expressionRegex.FindAllString(ctx.Source, -1); len(matchs) == 0 {
+        return   
     }
 
-    listener := &ExpressionListener{
-        xlsx: xlsx,
-        Source: value,
-        Sheet: sheet,
-        Row: row,
-        RowIndex: rowIndex,
-        Index: index,
+    for _, expression := range matchs {
+
+        ctx.Expression = expression
+
+        is := antlr.NewInputStream(expression)
+        lexer := parser.NewGrammarLexer(is)
+        stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+        p := parser.NewGrammarParser(stream)
+
+        antlr.ParseTreeWalkerDefault.Walk(ctx, p.Expression())
     }
-
-	is := antlr.NewInputStream(value)
-	lexer := parser.NewGrammarLexer(is)
-	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := parser.NewGrammarParser(stream)
-
-
-	// Finally parse the expression
-    antlr.ParseTreeWalkerDefault.Walk(listener, p.Expression())
+	
     return
 }
 
 var alphabet = strings.Split("ABCDEFGHIJKLMNOPQRSTUVWXYZ","")
 
-func colToAxis(col, row int) string{
-    return fmt.Sprintf("%s%d", alphabet[col], row)
+func CoordinatesToCellName(col, row int) string {
+    axis, _ := excelize.CoordinatesToCellName(col+1, row)
+    return axis
 }
   // for si, _   := range xlsx.Sheets {
     //     ctrl    := 0
