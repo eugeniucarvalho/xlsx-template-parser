@@ -18,6 +18,7 @@ type ExpressionListener struct {
     Row []string
     RowIndex int
     Index int
+    TemplateRowIndex int
     Skip int
     BasePath string
     replace interface{}
@@ -31,35 +32,37 @@ func init(){
     commands["range"] = func(expression *ExpressionListener, ctx *parser.ActionTypesContext) {
         var (
             xlsx = expression.xlsx
-            file = xlsx.file
-            rowIndex = expression.RowIndex + 1
+            rowIndex = expression.RowIndex + 1 
             sheet = expression.Sheet
             data = xlsx.data
+            file = xlsx.file
             index = 0
             basePath string
             rowBase = rowIndex
             rowAdded = 0
+            terminationIndex = expression.TemplateRowIndex
         )
 
         for {
-            value, _ := file.GetCellValue(
+            value, _ := xlsx.GetCellValue(
                 sheet,
                 CoordinatesToCellName(expression.Index, rowIndex),
             )
+            terminationIndex++
             if value == "{{stop}}" ||  value == "{{end}}"{
                 break
             }
             rowIndex++
         }
-
-        terminationIndex := rowIndex
-
-        rows := xlsx.Rows[expression.RowIndex: terminationIndex - 1]
+        rows := xlsx.Rows[expression.TemplateRowIndex + 1: terminationIndex]
         
         templateRowsCount := len(rows)
         expression.Skip = rowIndex - expression.RowIndex 
 
         rowBase = expression.RowIndex
+
+        // spew.Dump(rows)
+        // spew.Dump(expression.RowIndex, terminationIndex, templateRowsCount, )
 
         for {
             arrayIndexKey := fmt.Sprintf("%s.%d.$idx", expression.BasePath, index)
@@ -68,9 +71,8 @@ func init(){
                 break
             }
             
-            file.DuplicateRowTo(sheet,rowBase, rowBase + templateRowsCount)
+            file.DuplicateRowTo(sheet, rowBase, rowBase + templateRowsCount)
 
-            
             basePath = arrayIndexKey[: len(arrayIndexKey) - 5 ]
             
             rowAdded += templateRowsCount
@@ -91,6 +93,7 @@ func init(){
         for i := 0; i <= (templateRowsCount + 1) ; i++ {
             file.RemoveRow(sheet, rowBase)
         }
+
         expression.RowIndex = expression.RowIndex + rowAdded - 1
     }
 
@@ -126,22 +129,28 @@ func (expression *ExpressionListener) EvalCommand(ctx *parser.ActionTypesContext
 func (expression *ExpressionListener) SpreadHandler(ctx *parser.ActionTypesContext) {
     var (
         xlsx = expression.xlsx
-        file = xlsx.file
         sheet = expression.Sheet
         data = xlsx.data
         colIndex = expression.Index
         index = 0
     )
-
     for {
-        valueIndexKey := fmt.Sprintf("%s.%d", expression.BasePath, index)
+        valueIndexKey := fmt.Sprintf(
+            "%s.%d",
+            strings.TrimRight(expression.BasePath, "."),
+            index,
+        )
         arrayIndexKey := fmt.Sprintf("%s.$idx", valueIndexKey)
         
+        // fmt.Println("arrayIndexKey:",arrayIndexKey )
+        // fmt.Println("valueIndexKey:", valueIndexKey )
+
         if _, found := data[arrayIndexKey]; !found {
+            // fmt.Println(" não tem mais desse path", arrayIndexKey)
             break
         }
         
-        file.SetCellValue(
+        xlsx.SetCellValue(
             sheet,
             CoordinatesToCellName(colIndex, expression.RowIndex),
             data[valueIndexKey],
@@ -178,9 +187,11 @@ func (expression *ExpressionListener) EnterActionTypes(ctx *parser.ActionTypesCo
         }
         
         if path[:1] == "&" {
-            path = strings.Replace(path,"&",expression.BasePath,1)
+            path = strings.Replace(path,"&",expression.BasePath, 1)
         }
     }
+
+
     if ctx.Command() != nil {
         expression.BasePath = path
         expression.EvalCommand(ctx)
@@ -194,6 +205,7 @@ func (expression *ExpressionListener) EnterActionTypes(ctx *parser.ActionTypesCo
     } else if spreadContext != nil {
         expression.BasePath = path
         expression.SpreadHandler(ctx)
+        value = nil
 
     } else if value, found = data[path]; !found {
         value = ""
@@ -207,7 +219,7 @@ func (expression *ExpressionListener) ExitActionTypes(ctx *parser.ActionTypesCon
 }
 // ExitExpression is called when production expression is exited.
 func (expression *ExpressionListener) ExitExpression(ctx *parser.ExpressionContext) {
-
+    // fmt.Println("ExitExpression", expression.replace)
     if expression.replace != nil {
         
         value := strings.ReplaceAll(
@@ -216,7 +228,7 @@ func (expression *ExpressionListener) ExitExpression(ctx *parser.ExpressionConte
             fmt.Sprintf("%v", expression.replace),
         )
 
-        expression.xlsx.file.SetCellValue(
+        expression.xlsx.SetCellValue(
             expression.Sheet,
             CoordinatesToCellName(expression.Index, expression.RowIndex),
             value,

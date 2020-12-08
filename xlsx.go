@@ -24,6 +24,7 @@ type Xlsx struct {
     Rows  [][]string
     Error chan error
     Progress chan int
+    shift chan int
     Done chan bool
 }
 
@@ -63,6 +64,7 @@ func (xlsx *Xlsx) normalizeData(in interface{}) (data map[string]interface{}, er
 		variablesJson string
 		part string
 		base string
+		copy string
 		out           []byte
 	)
     
@@ -82,6 +84,12 @@ func (xlsx *Xlsx) normalizeData(in interface{}) (data map[string]interface{}, er
     
     for path := range data {
         base = ""
+        if path[0:2] == ".." {
+            copy = path
+            path = path[1:]
+            data[path] = data[copy]
+            delete(data, copy)
+        }
         parts := strings.Split(path,".")
         parts = parts[1:]
         for {
@@ -105,6 +113,18 @@ func (xlsx *Xlsx) normalizeData(in interface{}) (data map[string]interface{}, er
 // Render renders report and stores it in a struct
 func (xlsx *Xlsx) Render(in interface{}) (err error) {
     return xlsx.RenderWithOptions(in, new(Options))
+}
+// Render renders report and stores it in a struct
+func (xlsx *Xlsx) SetCellValue(sheet, axis string, value interface{}) (error) {
+    // fmt.Printf("set cell value [%s,%s] = %v\n", sheet, axis, value)
+    return xlsx.file.SetCellValue(sheet, axis, value)
+}
+
+func (xlsx *Xlsx) GetCellValue(sheet, axis string) (string, error) {
+
+    // v, e := xlsx.file.GetCellValue(sheet, axis)
+    // fmt.Printf("GET cell value [%s,%s] = %v\n", sheet, axis,v, e)
+    return xlsx.file.GetCellValue(sheet, axis)
 }
 
 // RenderWithOptions renders report with options provided and stores it in a struct
@@ -161,7 +181,6 @@ func (xlsx *Xlsx) renderSheet(name string) (err error) {
             println(err.Error())
             return
         }
-        
         xlsx.Rows = append(xlsx.Rows, row)
         
         if xlsx.hasStop(row) {
@@ -169,7 +188,24 @@ func (xlsx *Xlsx) renderSheet(name string) (err error) {
         }
     }
 
-    for _, row := range xlsx.Rows {
+    // for {
+    //     row := range xlsx.Rows[index]
+        
+    //     fmt.Println("eval row index: ", index, len(xlsx.Rows))
+        
+    //     context := &ExpressionListener{
+    //         xlsx: xlsx,
+    //         Sheet: name,
+    //         Row: row,
+    //         RowIndex: index,
+    //     }
+    
+    //     xlsx.EvalRow(context)
+
+    //     index = context.RowIndex + 1
+    // }
+
+    for tplIndex, row := range xlsx.Rows {
         
         if skip > 0 {
             skip--
@@ -181,6 +217,7 @@ func (xlsx *Xlsx) renderSheet(name string) (err error) {
             Sheet: name,
             Row: row,
             RowIndex: index,
+            TemplateRowIndex: tplIndex,
         }
     
         xlsx.EvalRow(context)
@@ -224,6 +261,8 @@ func (xlsx *Xlsx) EvalCell(ctx *ExpressionListener) (err error) {
     for _, expression := range matchs {
 
         ctx.Expression = expression
+        
+        // fmt.Println("XLSX::", expression)
 
         is := antlr.NewInputStream(expression)
         lexer := parser.NewGrammarLexer(is)
