@@ -10,67 +10,65 @@ import (
 	"strings"
 	"sync"
 
-	"git.nanocomp.dcc.ufmg.br/mggrafeno/platform.v2/utils/xlsx/parser"
 	"github.com/360EntSecGroup-Skylar/excelize/v2"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"github.com/eugeniucarvalho/xlsx-template-parser/parser"
 
 	"github.com/jeremywohl/flatten"
 )
 
 // Xlsx Represents template struct
 type Xlsx struct {
-    file *excelize.File
-    data  map[string]interface{}
-    Rows  [][]string
-    Error chan error
-    Progress chan int
-    shift chan int
-    Done chan bool
+	file     *excelize.File
+	data     map[string]interface{}
+	Rows     [][]string
+	Error    chan error
+	Progress chan int
+	shift    chan int
+	Done     chan bool
 }
 
 // Options for render has only one property WrapTextInAllCells for wrapping text
 type Options struct {
-    WrapTextInAllCells bool
+	WrapTextInAllCells bool
 }
 
 var (
-    expressionRegex = regexp.MustCompile(`(\{\{\s*[\w\s\.\&\$>]+\s*\}\})`)
-    stopRegex        = regexp.MustCompile(`\{\{\s*\/stop\s*\}\}`)
+	expressionRegex = regexp.MustCompile(`(\{\{\s*[\w\s\.\&\$>]+\s*\}\})`)
+	stopRegex       = regexp.MustCompile(`\{\{\s*\/stop\s*\}\}`)
 )
 
 // ReadTemplate reads template from disk and stores it in a struct
-func FromTemplate(path string) (xlsx *Xlsx,err error) {
-    
-    xlsx = &Xlsx{
-        Error: make(chan error),
-        Progress: make(chan int),
-        Done: make(chan bool),
-        data: map[string]interface{}{},
-    }
-    
-    xlsx.file, err = excelize.OpenFile(path)
-    
-    return 
+func FromTemplate(path string) (xlsx *Xlsx, err error) {
+
+	xlsx = &Xlsx{
+		Error:    make(chan error),
+		Progress: make(chan int),
+		Done:     make(chan bool),
+		data:     map[string]interface{}{},
+	}
+
+	xlsx.file, err = excelize.OpenFile(path)
+
+	return
 }
 
-
-
 func (xlsx *Xlsx) File() *excelize.File {
-    return xlsx.file
+	return xlsx.file
 }
 
 func (xlsx *Xlsx) normalizeData(in interface{}) (data map[string]interface{}, err error) {
-    var (
+	var (
 		variablesJson string
-		part string
-		base string
-		copy string
+		part          string
+		base          string
+		copy          string
 		out           []byte
 	)
-    
-    data = map[string]interface{}{}
 
-    if out, err = json.Marshal(in); err != nil {
+	data = map[string]interface{}{}
+
+	if out, err = json.Marshal(in); err != nil {
 		return
 	}
 
@@ -78,255 +76,257 @@ func (xlsx *Xlsx) normalizeData(in interface{}) (data map[string]interface{}, er
 		return
 	}
 
-    if err = json.Unmarshal([]byte(variablesJson), &data); err != nil {
-        return
-    }
-    
-    for path := range data {
-        base = ""
-        if path[0:2] == ".." {
-            copy = path
-            path = path[1:]
-            data[path] = data[copy]
-            delete(data, copy)
-        }
-        parts := strings.Split(path,".")
-        parts = parts[1:]
-        for {
-            if len(parts) == 0 {
-                break
-            }
-            part = parts[0]
-            parts = parts[1:]
-            
-            base = fmt.Sprintf("%s.%s", base, part)
-            
-            if index, err := strconv.ParseInt(part,10,64); err == nil {
-                data[fmt.Sprintf("%s.$idx", base)] = fmt.Sprintf("%d", index + 1)
-            }
-        }
-    } 
-    
-    return
+	if err = json.Unmarshal([]byte(variablesJson), &data); err != nil {
+		return
+	}
+
+	for path := range data {
+		base = ""
+		if path[0:2] == ".." {
+			copy = path
+			path = path[1:]
+			data[path] = data[copy]
+			delete(data, copy)
+		}
+		parts := strings.Split(path, ".")
+		parts = parts[1:]
+		for {
+			if len(parts) == 0 {
+				break
+			}
+			part = parts[0]
+			parts = parts[1:]
+
+			base = fmt.Sprintf("%s.%s", base, part)
+
+			if index, err := strconv.ParseInt(part, 10, 64); err == nil {
+				data[fmt.Sprintf("%s.$idx", base)] = fmt.Sprintf("%d", index+1)
+			}
+		}
+	}
+
+	return
 }
 
 // Render renders report and stores it in a struct
 func (xlsx *Xlsx) Render(in interface{}) (err error) {
-    return xlsx.RenderWithOptions(in, new(Options))
+	return xlsx.RenderWithOptions(in, new(Options))
 }
+
 // Render renders report and stores it in a struct
-func (xlsx *Xlsx) SetCellValue(sheet, axis string, value interface{}) (error) {
-    // fmt.Printf("set cell value [%s,%s] = %v\n", sheet, axis, value)
-    return xlsx.file.SetCellValue(sheet, axis, value)
+func (xlsx *Xlsx) SetCellValue(sheet, axis string, value interface{}) error {
+	// fmt.Printf("set cell value [%s,%s] = %v\n", sheet, axis, value)
+	return xlsx.file.SetCellValue(sheet, axis, value)
 }
 
 func (xlsx *Xlsx) GetCellValue(sheet, axis string) (string, error) {
 
-    // v, e := xlsx.file.GetCellValue(sheet, axis)
-    // fmt.Printf("GET cell value [%s,%s] = %v\n", sheet, axis,v, e)
-    return xlsx.file.GetCellValue(sheet, axis)
+	// v, e := xlsx.file.GetCellValue(sheet, axis)
+	// fmt.Printf("GET cell value [%s,%s] = %v\n", sheet, axis,v, e)
+	return xlsx.file.GetCellValue(sheet, axis)
 }
 
 // RenderWithOptions renders report with options provided and stores it in a struct
 func (xlsx *Xlsx) RenderWithOptions(data interface{}, options *Options) (err error) {
-    
-    var (
-        file = xlsx.file
-        wg = sync.WaitGroup{}
-    )
 
-    if xlsx.data, err  = xlsx.normalizeData(data); err != nil {
-        return
-    }
+	var (
+		file = xlsx.file
+		wg   = sync.WaitGroup{}
+	)
 
-    // spew.Dump(xlsx.data)
-    
-    for _, name := range file.GetSheetMap() {
-        wg.Add(1)
-        go func ()  {
-            defer func(){
-                wg.Done()
-            }()
-            if err = xlsx.renderSheet(name); err != nil {
-                xlsx.Error <-err
-            }
-        }()
-    }
-    wg.Wait()
-  
-    // xlsx.Done <- true
-    return nil
+	if xlsx.data, err = xlsx.normalizeData(data); err != nil {
+		return
+	}
+
+	// spew.Dump(xlsx.data)
+
+	for _, name := range file.GetSheetMap() {
+		wg.Add(1)
+		go func() {
+			defer func() {
+				wg.Done()
+			}()
+			if err = xlsx.renderSheet(name); err != nil {
+				xlsx.Error <- err
+			}
+		}()
+	}
+	wg.Wait()
+
+	// xlsx.Done <- true
+	return nil
 }
 
 func (xlsx *Xlsx) Save(path string) (err error) {
-    return xlsx.file.SaveAs(path)
+	return xlsx.file.SaveAs(path)
 }
 
 func (xlsx *Xlsx) renderSheet(name string) (err error) {
-    
-    var (
-        rows *excelize.Rows
-        row []string
-        index = 1
-        skip = 0
-    )
-    
-    if rows, err = xlsx.file.Rows(name); err != nil {
-        println(err.Error())
-        return
-    }
-    // Read all valid rows before a stop statement 
-    for rows.Next() {
-        if row, err = rows.Columns(); err != nil {
-            println(err.Error())
-            return
-        }
-        xlsx.Rows = append(xlsx.Rows, row)
-        
-        if xlsx.hasStop(row) {
-            break
-        }
-    }
 
-    // for {
-    //     row := range xlsx.Rows[index]
-        
-    //     fmt.Println("eval row index: ", index, len(xlsx.Rows))
-        
-    //     context := &ExpressionListener{
-    //         xlsx: xlsx,
-    //         Sheet: name,
-    //         Row: row,
-    //         RowIndex: index,
-    //     }
-    
-    //     xlsx.EvalRow(context)
+	var (
+		rows  *excelize.Rows
+		row   []string
+		index = 1
+		skip  = 0
+	)
 
-    //     index = context.RowIndex + 1
-    // }
+	if rows, err = xlsx.file.Rows(name); err != nil {
+		println(err.Error())
+		return
+	}
+	// Read all valid rows before a stop statement
+	for rows.Next() {
+		if row, err = rows.Columns(); err != nil {
+			println(err.Error())
+			return
+		}
+		xlsx.Rows = append(xlsx.Rows, row)
 
-    for tplIndex, row := range xlsx.Rows {
-        
-        if skip > 0 {
-            skip--
-            continue
-        }
-        
-        context := &ExpressionListener{
-            xlsx: xlsx,
-            Sheet: name,
-            Row: row,
-            RowIndex: index,
-            TemplateRowIndex: tplIndex,
-        }
-    
-        xlsx.EvalRow(context)
+		if xlsx.hasStop(row) {
+			break
+		}
+	}
 
-        skip = context.Skip
-        
-        index = context.RowIndex + 1
-    }
-    
-    return 
+	// for {
+	//     row := range xlsx.Rows[index]
+
+	//     fmt.Println("eval row index: ", index, len(xlsx.Rows))
+
+	//     context := &ExpressionListener{
+	//         xlsx: xlsx,
+	//         Sheet: name,
+	//         Row: row,
+	//         RowIndex: index,
+	//     }
+
+	//     xlsx.EvalRow(context)
+
+	//     index = context.RowIndex + 1
+	// }
+
+	for tplIndex, row := range xlsx.Rows {
+
+		if skip > 0 {
+			skip--
+			continue
+		}
+
+		context := &ExpressionListener{
+			xlsx:             xlsx,
+			Sheet:            name,
+			Row:              row,
+			RowIndex:         index,
+			TemplateRowIndex: tplIndex,
+		}
+
+		xlsx.EvalRow(context)
+
+		skip = context.Skip
+
+		index = context.RowIndex + 1
+	}
+
+	return
 }
 
 func (xlsx *Xlsx) hasStop(row []string) bool {
-    return row == nil ||  stopRegex.MatchString(row[0])
+	return row == nil || stopRegex.MatchString(row[0])
 }
 
 func (xlsx *Xlsx) EvalRow(ctx *ExpressionListener) (err error) {
-    // sheet string, row []string, rowIndex int
-    for index, value := range ctx.Row {
-        // xlsx.evalCell(sheet, row, rowIndex, index, val)
-        ctx.Index = index 
-        ctx.Source = value 
+	// sheet string, row []string, rowIndex int
+	for index, value := range ctx.Row {
+		// xlsx.evalCell(sheet, row, rowIndex, index, val)
+		ctx.Index = index
+		ctx.Source = value
 
-        xlsx.EvalCell(ctx)
-    }
-    return
+		xlsx.EvalCell(ctx)
+	}
+	return
 }
 
 // func (xlsx *Xlsx) evalCell(sheet string, row []string, rowIndex, index int, value string) (err error) {
 func (xlsx *Xlsx) EvalCell(ctx *ExpressionListener) (err error) {
 
-    var (
-        matchs []string
-    )
-    ctx.Source = strings.Trim(ctx.Source," ")
+	var (
+		matchs []string
+	)
+	ctx.Source = strings.Trim(ctx.Source, " ")
 
-    if matchs = expressionRegex.FindAllString(ctx.Source, -1); len(matchs) == 0 {
-        return   
-    }
+	if matchs = expressionRegex.FindAllString(ctx.Source, -1); len(matchs) == 0 {
+		return
+	}
 
-    for _, expression := range matchs {
+	for _, expression := range matchs {
 
-        ctx.Expression = expression
-        
-        // fmt.Println("XLSX::", expression)
+		ctx.Expression = expression
 
-        is := antlr.NewInputStream(expression)
-        lexer := parser.NewGrammarLexer(is)
-        stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-        p := parser.NewGrammarParser(stream)
+		// fmt.Println("XLSX::", expression)
 
-        antlr.ParseTreeWalkerDefault.Walk(ctx, p.Expression())
-    }
-	
-    return
+		is := antlr.NewInputStream(expression)
+		lexer := parser.NewGrammarLexer(is)
+		stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+		p := parser.NewGrammarParser(stream)
+
+		antlr.ParseTreeWalkerDefault.Walk(ctx, p.Expression())
+	}
+
+	return
 }
 
-var alphabet = strings.Split("ABCDEFGHIJKLMNOPQRSTUVWXYZ","")
+var alphabet = strings.Split("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "")
 
 func CoordinatesToCellName(col, row int) string {
-    axis, _ := excelize.CoordinatesToCellName(col+1, row)
-    return axis
+	axis, _ := excelize.CoordinatesToCellName(col+1, row)
+	return axis
 }
-  // for si, _   := range xlsx.Sheets {
-    //     ctrl    := 0
-    //     ctx     := getCtx(in, si)
-    //     sheet   := xlsx.Sheets[si]
-    //     //Verifica se a planilha possui linhas para processar
-    //     lenRows := len(sheet.Rows)
 
-    //     if lenRows == 0 { continue }
+// for si, _   := range xlsx.Sheets {
+//     ctrl    := 0
+//     ctx     := getCtx(in, si)
+//     sheet   := xlsx.Sheets[si]
+//     //Verifica se a planilha possui linhas para processar
+//     lenRows := len(sheet.Rows)
 
-    //     for {
-    //         //fmt.Println("Read row", ctrl, len(sheet.Rows))
-    //         if ctrl == lenRows { break }
+//     if lenRows == 0 { continue }
 
-    //         row := sheet.Rows[ctrl] 
-    //         //if(!ok) {continue}
+//     for {
+//         //fmt.Println("Read row", ctrl, len(sheet.Rows))
+//         if ctrl == lenRows { break }
 
-    //         if isTerminador(row) {
-    //             sheet.Rows = sheet.Rows[:ctrl]
-    //             break
-    //         }
+//         row := sheet.Rows[ctrl]
+//         //if(!ok) {continue}
 
-    //         prop := isList(row)
-    //         format := map[string]interface{}{}
-    //         types, ok := ctx[prop + "Types"];
-    //         if ok {
-    //             format = reflect.ValueOf(types).Interface().(map[string]interface{})
-    //         }
-    //         if prop != "" && isArray(ctx, prop) {
-    //             row := sheet.Rows[ctrl + 1] 
-               
-    //             lista := reflect.ValueOf(ctx[prop])
-    //             for i := 0; i < lista.Len(); i++ {
-    //                 rowcp := copyRow(row)
-    //                 RenderRow(sheet, rowcp, lista.Index(i).Interface(), format)
-    //                 //adiciona a linha nova
-    //                 sheet.Rows = append(sheet.Rows[:ctrl], append([]*Row{rowcp} , sheet.Rows[ctrl:]...)...)
-    //                 ctrl++
-    //             }
-    //             //Remove os elementos de controle do template
-    //             sheet.Rows = append(sheet.Rows[:ctrl], sheet.Rows[ctrl+3:]...)
-    //         } else {
-    //             RenderRow(sheet, sheet.Rows[ctrl], ctx, format);
-    //             ctrl++ 
-    //         }
-    //     }
-    // }
+//         if isTerminador(row) {
+//             sheet.Rows = sheet.Rows[:ctrl]
+//             break
+//         }
+
+//         prop := isList(row)
+//         format := map[string]interface{}{}
+//         types, ok := ctx[prop + "Types"];
+//         if ok {
+//             format = reflect.ValueOf(types).Interface().(map[string]interface{})
+//         }
+//         if prop != "" && isArray(ctx, prop) {
+//             row := sheet.Rows[ctrl + 1]
+
+//             lista := reflect.ValueOf(ctx[prop])
+//             for i := 0; i < lista.Len(); i++ {
+//                 rowcp := copyRow(row)
+//                 RenderRow(sheet, rowcp, lista.Index(i).Interface(), format)
+//                 //adiciona a linha nova
+//                 sheet.Rows = append(sheet.Rows[:ctrl], append([]*Row{rowcp} , sheet.Rows[ctrl:]...)...)
+//                 ctrl++
+//             }
+//             //Remove os elementos de controle do template
+//             sheet.Rows = append(sheet.Rows[:ctrl], sheet.Rows[ctrl+3:]...)
+//         } else {
+//             RenderRow(sheet, sheet.Rows[ctrl], ctx, format);
+//             ctrl++
+//         }
+//     }
+// }
 // func copyRow(from *Row) (to *Row) {
 // 	to = &Row{Sheet: from.Sheet}
 //         to.Height = from.Height
@@ -385,7 +385,7 @@ func CoordinatesToCellName(col, row int) string {
 
 //         prop := removeMustache.ReplaceAllString(cell.Value, "")
 //         v, _ := ctx.(map[string]interface{})[prop]
-        
+
 //         if  v == nil {
 //             cell.SetString("");
 //             continue;
@@ -394,14 +394,14 @@ func CoordinatesToCellName(col, row int) string {
 //         codf, _ := format[prop]
 //         //fmt.Println("Cell prop", "-"+cell.Value+"-",prop, codf , v, "\n")
 //         var typec int
-        
+
 //         if codf != nil {
 //             typec = int(codf.(float64))
 //         }else {
 //             typec = 2
 //         }
 //         switch typec {
-            
+
 //             case 3 :// bool
 //                 vs := "Não"
 //                 if v.(bool) {vs = "Sim"}
@@ -417,14 +417,14 @@ func CoordinatesToCellName(col, row int) string {
 //                 cell.SetFormula(v.(string))
 //             case 7 :// money
 //                 //cell.SetFloatWithFormat(v.(float64), `0.00,_-R$ * #.##0,00_-;-R$ * #.##0,00_-;_-R$ * "-"_-;_-@_-`)
-//                 cell.SetFloatWithFormat(v.(float64), "R$ * #.#,00 ;[red]-R$ * #.#,00;R$ * 0,00") 
+//                 cell.SetFloatWithFormat(v.(float64), "R$ * #.#,00 ;[red]-R$ * #.#,00;R$ * 0,00")
 //             case 8 :
 //                 cell.SetHyperLink(v.(string))
 //             case 9 :
 //                 //  xtime := F64toTime(v.(float64))
 //                 //fmt.Println("Time: ", xtime)
-//                 //cell.SetDateTimeWithFormat(timeToExcelTime(F64toTime(v.(float64))), "h:mm") 
-//                 cell.SetTime(F64toTime(v.(float64))) 
+//                 //cell.SetDateTimeWithFormat(timeToExcelTime(F64toTime(v.(float64))), "h:mm")
+//                 cell.SetTime(F64toTime(v.(float64)))
 //             default:
 //                 cell.Value = raymond.MustRender(cell.Value, ctx)
 //         }
@@ -455,7 +455,7 @@ func CoordinatesToCellName(col, row int) string {
 // func isArray(in map[string]interface{}, prop string) bool {
 //     val, ok := in[prop]
 //     if !ok || val == nil { return false }
-    
+
 //     switch reflect.TypeOf(val).Kind() {
 //         case reflect.Array, reflect.Slice:
 //             return true
